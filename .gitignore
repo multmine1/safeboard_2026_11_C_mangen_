@@ -1,0 +1,15 @@
+# CMake build directory
+/build/
+
+# Additional CMake build directories
+/build-*/
+/cmake-build-*/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
