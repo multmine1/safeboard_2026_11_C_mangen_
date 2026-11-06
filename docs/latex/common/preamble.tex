@@ -1,0 +1,67 @@
+\usepackage[a4paper,left=25mm,right=20mm,top=24mm,bottom=24mm]{geometry}
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setotherlanguage{english}
+\IfFontExistsTF{Libertinus Serif}{
+    \setmainfont{Libertinus Serif}
+    \newfontfamily\cyrillicfont{Libertinus Serif}
+}{
+    \IfFontExistsTF{DejaVu Serif}{
+        \setmainfont{DejaVu Serif}
+        \newfontfamily\cyrillicfont{DejaVu Serif}
+    }{
+        \setmainfont{Times New Roman}
+        \newfontfamily\cyrillicfont{Times New Roman}
+    }
+}
+\IfFontExistsTF{DejaVu Sans Mono}{\setmonofont{DejaVu Sans Mono}[Scale=0.82]}{}
+\usepackage{microtype}
+\usepackage{setspace}
+\setstretch{1.20}
+\usepackage{parskip}
+\setlength{\parindent}{0pt}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{ragged2e}
+\newcolumntype{P}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\setlength{\emergencystretch}{3em}
+\usepackage{enumitem}
+\usepackage{needspace}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\setlist{topsep=3pt,itemsep=2pt,parsep=0pt}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\definecolor{codegray}{RGB}{62,66,72}
+\usepackage{listings}
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    breakatwhitespace=false,
+    columns=fullflexible,
+    showstringspaces=false,
+    frame=single,
+    rulecolor=\color{black!20},
+    xleftmargin=4pt,
+    xrightmargin=4pt,
+    aboveskip=8pt,
+    belowskip=8pt
+}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+\usepackage{hyperref}
+\hypersetup{hidelinks,pdfauthor={Agibalov Vladislav},pdflang={ru-RU}}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\headheight}{14pt}
+\fancyhf{}
+\fancyhead[L]{\small mangen}
+\fancyhead[R]{\small Техническая документация · 2026}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.2pt}
+\setcounter{tocdepth}{2}
+\newcommand{\impl}{\textbf{Реализация.}~}

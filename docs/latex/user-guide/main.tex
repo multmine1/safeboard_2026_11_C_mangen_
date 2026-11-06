@@ -1,0 +1,228 @@
+\documentclass[12pt,a4paper]{article}
+\input{../common/preamble.tex}
+\title{mangen\\Руководство пользователя и сборки}
+\author{Агибалов Владислав Сергеевич\\НИЯУ МИФИ, ИВТ}
+\date{2026 год}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+Руководство по автономной сборке, запуску, интерпретации результатов,
+проверке хэш-сумм и аутентичности манифеста. Описываются различия между
+macOS и Linux, ограничения доступа к файлам и двухкоммитный выпуск ZIP.
+\end{abstract}
+\tableofcontents
+\newpage
+
+\section{Назначение и область применения}
+
+\texttt{mangen} предназначен для инвентаризации содержимого файлового
+каталога с криптографическими хэшами SHA-2. Программа не изменяет файлы
+обрабатываемого дерева и не создаёт манифест самостоятельно: перенаправление
+\texttt{stdout} выполняется оболочкой. Для записи каталога в манифест
+необходимо исключить его из обхода или хранить вывод вне проверяемого дерева.
+
+\section{Подготовка к автономной сборке}
+
+Требуются CMake версии, заявленной в \texttt{CMakeLists.txt},
+компилятор C17, POSIX-совместимая система macOS или Linux и инструменты сборки
+(Make либо Ninja). Для \texttt{BUILD\_TESTING=ON} дополнительно нужен
+компилятор C++17. Библиотеки Concurrency Kit, Mbed TLS и GoogleTest должны
+находиться в \texttt{libs/third\_party/} до начала конфигурации.
+
+\subsection{Сборка с тестами}
+
+Команды выполняются в корне распакованного исходного каталога:
+
+\begin{lstlisting}
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build --parallel 4
+ctest --test-dir build --output-on-failure
+cmake --install build --prefix "$PWD/build/install"
+./build/install/bin/mangen --help
+\end{lstlisting}
+
+Выполняется локальная конфигурация; скачивание библиотек во время build не
+требуется. Каталог установки задаётся относительным к пользователю префиксом,
+поэтому привилегии администратора обычно не нужны.
+
+\subsection{Сборка только производственного приложения}
+
+\begin{lstlisting}
+cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTING=OFF
+cmake --build build/release --parallel 4
+cmake --install build/release --prefix "$PWD/build/release/install"
+\end{lstlisting}
+
+При этом проект не должен требовать C++ и GoogleTest. Если сборка с
+\texttt{BUILD\_TESTING=OFF} требует C++-компилятор, это нарушение контракта
+сборки, подлежащее исправлению.
+
+\subsection{macOS и Linux}
+
+\begin{tabularx}{\textwidth}{P{0.28\textwidth}YY}
+\toprule
+Задача & macOS & Linux \\
+\midrule
+Компилятор & Apple Clang или GCC & GCC или Clang \\
+SHA-256 & \texttt{shasum -a 256} & \texttt{sha256sum} \\
+SHA-384 & \texttt{shasum -a 384} & \texttt{sha384sum} \\
+SHA-512 & \texttt{shasum -a 512} & \texttt{sha512sum} \\
+Диагностика памяти & ASan/UBSan, \texttt{leaks} & ASan/UBSan/LSan \\
+\bottomrule
+\end{tabularx}
+
+Набор Bash-скриптов использует Bash 3.2 или новее и определяет доступную
+системную утилиту SHA без установки сторонних пакетов. Для ОС Linux
+действительно требуется отдельный запуск компиляции и CTest, одной
+успешной macOS-сборки недостаточно.
+
+\section{Командная строка}
+
+\begin{lstlisting}
+mangen [DIR_PATH] [OPTIONS]
+\end{lstlisting}
+
+\begin{longtable}{P{0.28\textwidth}P{0.62\textwidth}}
+\toprule
+Аргумент & Семантика \\
+\midrule
+\endhead
+\texttt{DIR\_PATH} & Корневой каталог, по умолчанию текущий. \\
+\texttt{-h}, \texttt{--help} & Справка без сканирования дерева. \\
+\texttt{-v}, \texttt{--version} & Информация о версии приложения и сборке. \\
+\texttt{-e PATTERN} & Исключение базовых имён, многократно, объединение ИЛИ. \\
+\texttt{--sha256} & SHA-256 по умолчанию. \\
+\texttt{--sha384} & SHA-384. \\
+\texttt{--sha512} & SHA-512. \\
+\texttt{-j N}, \texttt{--threads N} & Положительное количество потоков. \\
+\texttt{--queue-size N} & Стартовая ёмкость очереди каталогов. \\
+\bottomrule
+\end{longtable}
+
+\section{Получение и интерпретация манифеста}
+
+\begin{lstlisting}
+./build/install/bin/mangen ./data --sha256 --threads 4 \
+    > ./manifest.txt 2> ./diagnostics.txt
+printf 'exit=%s\n' "$?"
+\end{lstlisting}
+
+Одна успешная запись содержит относительный путь, пробел, двоеточие, пробел
+и полное HEX-значение SHA. Имена отсортированы. Содержимое не зависит от
+порядка завершения рабочих потоков. Ошибки чтения файлов, доступа к каталогам
+и некорректных ссылок помещаются в \texttt{diagnostics.txt}.
+
+\subsection{Коды завершения}
+
+\begin{itemize}
+\item \texttt{0}: все применимые файлы обработаны без ошибок.
+\item \texttt{1}: ошибка во время обхода или хэширования; доступные записи
+могут присутствовать, но манифест является \emph{частичным}.
+\item \texttt{2}: ошибка аргументов запуска.
+\end{itemize}
+
+Нельзя считать частичный манифест полным только потому, что файл
+\texttt{manifest.txt} существует и содержит корректные SHA.
+
+\section{Проверка прав на двух деревьях}
+
+Скрипт создаёт отдельные \texttt{clean} и \texttt{restricted} с одинаковым
+содержимым. Во втором дереве рандомизируются права chmod; гарантированно
+закрываются хотя бы один каталог и один файл. Тест должен выполняться без
+root, иначе проверки прав могут оказаться неинформативны.
+
+\begin{lstlisting}
+TEST_ROOT=$(bash scripts/generate_test_trees.sh)
+bash scripts/verify_test_trees.sh "$TEST_ROOT" \
+    ./build/install/bin/mangen
+\end{lstlisting}
+
+Проверка создаёт независимый эталон посредством \texttt{find},
+\texttt{shasum} или GNU \texttt{sha*sum}, сравнивает полный список строк
+побайтно, сортировку и идентичность результатов для одного и четырёх
+потоков. Проверяются все три SHA-алгоритма. Статус ограниченного дерева
+должен быть \texttt{1} у обычного пользователя; доступная часть
+обязана совпадать с эталоном.
+
+\section{Контроль целостности при передаче}
+
+\subsection{Три разных гарантии}
+
+\begin{enumerate}
+\item \textbf{SHA-256 ZIP} выявляет случайные изменения байтов архива,
+если значение получено из доверенного источника. Hash-файл из того же
+недоверенного канала сам по себе не доказывает происхождение.
+\item \textbf{Git commit hash} идентифицирует исходное зафиксированное
+дерево, но не является суммой ZIP и не удостоверяет несохранённые правки.
+\item \textbf{Цифровая SSH-подпись манифеста} подтверждает подлинность
+самого документа при условии, что доверенный публичный ключ получен
+отдельно и закреплён получателем.
+\end{enumerate}
+
+\subsection{Подпись манифеста через OpenSSH}
+
+Для подписания подходит SSH-ключ Ed25519. Команда
+\texttt{ssh-keygen} в режиме \texttt{-Y sign} формирует подпись.
+Секретный ключ не помещают в ZIP.
+
+\begin{lstlisting}
+bash scripts/sign_manifest.sh manifest.txt "$HOME/.ssh/id_ed25519"
+\end{lstlisting}
+
+Создаётся \texttt{manifest.txt.sig}. Получатель заранее получает
+\texttt{trusted\_signers} через отдельный доверенный канал:
+
+\begin{lstlisting}
+maintainer@example.org ssh-ed25519 AAAA...TRUSTED_PUBLIC_KEY
+\end{lstlisting}
+
+Строка выше --- только описание формата; пользователь должен подставить
+\emph{реальный} ранее проверенный публичный ключ, не копировать пример.
+
+\begin{lstlisting}
+bash scripts/verify_manifest_signature.sh \
+    manifest.txt manifest.txt.sig trusted_signers maintainer@example.org
+\end{lstlisting}
+
+Скрипт проверяет домен \texttt{mangen-manifest} и доверенного
+подписанта. Если манифест подменён, ключ не совпадает или подпись повреждена,
+команда завершается с ошибкой. Для проверки содержимого каталога после
+проверки подписи необходимо независимо пересчитать хэши его файлов;
+подпись сама по себе доказывает неизменность списка, но не байтов файлов.
+
+\section{Схема двухкоммитного релиза}
+
+\begin{enumerate}
+\item Коммит A содержит производственный код, тесты, \texttt{scripts/},
+\texttt{README.md}, LaTeX-исходники и готовые PDF.
+\item \texttt{scripts/package\_release.sh} создаёт ZIP из исходников
+коммита A, добавляя \texttt{VERSION-COMMIT} с идентификатором A.
+\item SHA-256 ZIP сохраняется в отдельный TXT в каталоге
+\texttt{safeboard/}.
+\item Коммит B добавляет только соответствующий TXT; сам ZIP не изменяется
+после вычисления суммы и не входит в коммит B.
+\end{enumerate}
+
+Это исключает самоссылку: SHA-256 ZIP нельзя вписать в файл, который
+уже находится внутри того же ZIP, не изменив архив. Встроенный
+\texttt{VERSION-COMMIT} также создаётся на этапе упаковки: файл внутри
+Git-коммита невозможно автоматически заполнить hash самого этого коммита.
+
+\section{Ограничения}
+
+Ссылка на файл может указывать за пределы дерева.
+Файлы могут измениться между обнаружением и чтением; последовательные SHA
+при изменении данных могут различаться. Защищённые каталоги приводят к
+частичному результату. Для доказательной инвентаризации рекомендуется
+неизменяемый набор данных, снимок файловой системы или изолированная копия.
+
+\addcontentsline{toc}{section}{Список литературы}
+\begin{thebibliography}{9}
+\bibitem{ssh} OpenSSH. ssh-keygen(1), signature operations. \url{https://man.openbsd.org/ssh-keygen}
+\bibitem{cmake} Kitware. CMake documentation. \url{https://cmake.org/cmake/help/latest/}
+\bibitem{gnu} GNU Coreutils. SHA-2 utilities. \url{https://www.gnu.org/software/coreutils/manual/}
+\bibitem{sha} NIST. FIPS 180-4. \url{https://csrc.nist.gov/pubs/fips/180-4/upd1/final}
+\end{thebibliography}
+\end{document}
