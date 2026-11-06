@@ -22,3 +22,6 @@ endif()
 add_subdirectory(libs/matcher)
 add_subdirectory(libs/queue)
 add_subdirectory(libs/catalog)
+add_subdirectory(libs/hash)
+add_subdirectory(libs/hash_pool)
+
